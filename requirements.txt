@@ -1,0 +1,15 @@
+# Orchestration and LLM Framework
+langchain>=0.1.0
+langchain-openai>=0.1.0
+langgraph>=0.0.30
+
+# Memory / Vector DB
+chromadb>=0.4.22
+sentence-transformers>=2.5.1
+
+# Tooling / Standard
+mcp-sdk>=0.1.0 # (Note: adjust based on the specific MCP Python SDK implementation you are using)
+pydantic>=2.6.0
+
+# Image generation requests
+requests>=2.31.0

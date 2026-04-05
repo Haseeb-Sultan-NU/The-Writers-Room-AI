@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Environment Variables
+.env
+
+# ChromaDB / FAISS local storage
+chroma_data/
+vector_store/
+
+# Generated Output Data (We only want the code in Git, not the generated artifacts)
+image_assets/*
+scene_manifest.json
+character_db.json
+
+# OS files
+.DS_Store
+Thumbs.db
