@@ -8,7 +8,7 @@ chromadb>=0.4.22
 sentence-transformers>=2.5.1
 
 # Tooling / Standard
-mcp-sdk>=0.1.0 # (Note: adjust based on the specific MCP Python SDK implementation you are using)
+mcp>=0.1.0 
 pydantic>=2.6.0
 
 # Image generation requests
