@@ -37,6 +37,9 @@ class ToolRegistry:
 # TOOL SCHEMAS (Defining the structured JSON inputs agents must provide)
 # =====================================================================
 
+class ParseScriptInput(BaseModel):
+    raw_text: str = Field(..., description="The raw manual script text to parse.")
+
 class GenerateScriptInput(BaseModel):
     prompt: str = Field(..., description="The user's prompt or story idea.")
     num_scenes: int = Field(default=5, description="Number of scenes to generate.")
@@ -49,9 +52,50 @@ class CommitMemoryInput(BaseModel):
 # TOOL IMPLEMENTATIONS (Dummy functions for now, we will connect LLMs later)
 # =====================================================================
 
-def generate_script_segment(prompt: str, num_scenes: int = 5) -> Dict[str, Any]:
-    """Placeholder logic for the Scriptwriter Agent."""
-    return {"status": "success", "message": f"Generated {num_scenes} scenes for: {prompt}"}
+def generate_script_segment(prompt: str, num_scenes: int = 1) -> Dict[str, Any]:
+    """Uses Groq to autonomously generate a structured script segment."""
+    import os
+    import json
+    from langchain_groq import ChatGroq
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    print(f"      [SYSTEM] Calling Groq LLM for script generation...")
+    
+    # Initialize the fast Groq model
+    llm = ChatGroq(
+        temperature=0.7, 
+        model_name="llama-3.1-8b-instant", 
+        groq_api_key=os.getenv("GROQ_API_KEY")
+    )
+    
+    # We ask the LLM to output pure JSON matching our required schema
+    system_prompt = f"""You are an expert screenwriter. Generate a {num_scenes}-scene script based on this prompt: "{prompt}". 
+    You MUST output valid JSON ONLY. No markdown, no intro text.
+    Format required:
+    {{
+      "scenes": [
+        {{
+          "scene_id": 1,
+          "location": "Brief Location Description",
+          "characters": ["CHAR1", "CHAR2"],
+          "dialogue": [
+            {{"speaker": "CHAR1", "line": "Dialogue here", "visual_cue": "Visual instruction"}}
+          ]
+        }}
+      ]
+    }}"""
+    
+    try:
+        response = llm.invoke(system_prompt)
+        # Parse the JSON string returned by the LLM into a Python dictionary
+        script_data = json.loads(response.content)
+        return {"status": "success", "message": "Script generated.", "script": script_data}
+    except Exception as e:
+        print(f"      [ERROR] Groq script generation failed: {e}")
+        # Fallback to avoid crashing the pipeline
+        fallback = {"scenes": [{"scene_id": 1, "location": "Fallback Location", "characters": ["ERROR"], "dialogue": [{"speaker": "ERROR", "line": "Failed to generate.", "visual_cue": "none"}]}]}
+        return {"status": "failed", "message": str(e), "script": fallback}
 
 def commit_memory(collection_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """Placeholder logic for interacting with ChromaDB."""
@@ -69,19 +113,45 @@ class GenerateImageInput(BaseModel):
 # --- NEW FUNCTIONS FOR PHASE 4 ---
 
 def extract_character_profiles(script_text: str) -> Dict[str, Any]:
-    """Placeholder logic for extracting characters from a script."""
-    # In reality, an LLM would parse the script. We are mocking the structured return.
-    return {
-        "status": "success",
-        "characters": [
-            {
-                "name": "DETECTIVE",
-                "personality": "Gruff, cynical, observant.",
-                "appearance": "Trench coat, cybernetic glowing right eye, messy hair.",
-                "reference_style": "Cyberpunk, cinematic lighting, 8k resolution"
-            }
-        ]
-    }
+    """Uses Groq to analyze the script and extract character identities."""
+    import os
+    import json
+    from langchain_groq import ChatGroq
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    print(f"      [SYSTEM] Calling Groq LLM for character extraction...")
+    
+    llm = ChatGroq(
+        temperature=0.3, # Lower temperature for analytical tasks
+        model_name="llama-3.1-8b-instant", 
+        groq_api_key=os.getenv("GROQ_API_KEY")
+    )
+    
+    system_prompt = f"""Read the following script and extract the main characters.
+    You MUST output valid JSON ONLY. No markdown, no intro text.
+    Format required:
+    {{
+      "characters": [
+        {{
+          "name": "CHARACTER NAME",
+          "personality": "3 comma separated traits",
+          "appearance": "Physical description and clothing",
+          "reference_style": "Cinematic, fantasy illustration, highly detailed, 8k"
+        }}
+      ]
+    }}
+    
+    Script:
+    {script_text}"""
+    
+    try:
+        response = llm.invoke(system_prompt)
+        character_data = json.loads(response.content)
+        return {"status": "success", "characters": character_data.get("characters", [])}
+    except Exception as e:
+        print(f"      [ERROR] Groq character extraction failed: {e}")
+        return {"status": "failed", "characters": []}
 
 def generate_character_image(prompt: str, negative_prompt: str = "") -> Dict[str, Any]:
     """
@@ -123,6 +193,49 @@ def generate_character_image(prompt: str, negative_prompt: str = "") -> Dict[str
     except Exception as e:
         print(f"      [ERROR] Image generation failed: {e}")
         return {"status": "failed", "image_path": None}
+    
+def parse_manual_script(raw_text: str) -> Dict[str, Any]:
+    """Uses Groq to convert a raw text script into the standardized JSON format."""
+    import os
+    import json
+    from langchain_groq import ChatGroq
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    print(f"      [SYSTEM] Calling Groq LLM to parse manual script...")
+    
+    llm = ChatGroq(
+        temperature=0.1, # Very low temp because we just want extraction, not creativity
+        model_name="llama-3.1-8b-instant", 
+        groq_api_key=os.getenv("GROQ_API_KEY")
+    )
+    
+    system_prompt = f"""You are a data extractor. Convert this raw screenplay into structured JSON.
+    You MUST output valid JSON ONLY. No markdown, no intro text.
+    Format required:
+    {{
+      "scenes": [
+        {{
+          "scene_id": 1,
+          "location": "Location extracted from INT/EXT",
+          "characters": ["CHAR1", "CHAR2"],
+          "dialogue": [
+            {{"speaker": "CHAR1", "line": "Dialogue here", "visual_cue": "Action lines or context"}}
+          ]
+        }}
+      ]
+    }}
+    
+    Raw Script:
+    {raw_text}"""
+    
+    try:
+        response = llm.invoke(system_prompt)
+        script_data = json.loads(response.content)
+        return {"status": "success", "script": script_data}
+    except Exception as e:
+        print(f"      [ERROR] Groq parsing failed: {e}")
+        return {"status": "failed", "script": {}}
 # =====================================================================
 # INITIALIZE & REGISTER
 # =====================================================================
@@ -156,6 +269,12 @@ registry.register_tool(
     description="Generates a character reference image using local stable diffusion.",
     schema=GenerateImageInput,
     func=generate_character_image
+)
+registry.register_tool(
+    name="parse_manual_script",
+    description="Parses raw screenplay format into standardized JSON.",
+    schema=ParseScriptInput,
+    func=parse_manual_script
 )
 
 if __name__ == "__main__":
