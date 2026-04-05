@@ -57,6 +57,72 @@ def commit_memory(collection_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """Placeholder logic for interacting with ChromaDB."""
     return {"status": "success", "message": f"Saved agent data to {collection_name}"}
 
+# --- NEW SCHEMAS FOR PHASE 4 ---
+
+class ExtractCharacterInput(BaseModel):
+    script_text: str = Field(..., description="The script text to analyze for characters.")
+
+class GenerateImageInput(BaseModel):
+    prompt: str = Field(..., description="The visual description of the character.")
+    negative_prompt: str = Field(default="ugly, deformed, low resolution", description="What to avoid in the image.")
+
+# --- NEW FUNCTIONS FOR PHASE 4 ---
+
+def extract_character_profiles(script_text: str) -> Dict[str, Any]:
+    """Placeholder logic for extracting characters from a script."""
+    # In reality, an LLM would parse the script. We are mocking the structured return.
+    return {
+        "status": "success",
+        "characters": [
+            {
+                "name": "DETECTIVE",
+                "personality": "Gruff, cynical, observant.",
+                "appearance": "Trench coat, cybernetic glowing right eye, messy hair.",
+                "reference_style": "Cyberpunk, cinematic lighting, 8k resolution"
+            }
+        ]
+    }
+
+def generate_character_image(prompt: str, negative_prompt: str = "") -> Dict[str, Any]:
+    """
+    Generates a character reference image using a free, keyless cloud API (Pollinations.ai).
+    Zero local storage or GPU required.
+    """
+    import os
+    import urllib.parse
+    import urllib.request
+    import uuid
+    
+    print("      [SYSTEM] Requesting image from lightweight cloud API...")
+    
+    # 1. Ensure our output folder exists
+    os.makedirs("./image_assets", exist_ok=True)
+    
+    # 2. Format the URL with the visual prompt
+    encoded_prompt = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true&model=flux"
+    
+    # 3. Create a unique filename
+    filename = f"./image_assets/char_{uuid.uuid4().hex[:6]}.jpg"
+    
+    try:
+        # 4. Create a request with a standard browser User-Agent to prevent 403 Forbidden errors
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        )
+        
+        # 5. Download and save the image
+        with urllib.request.urlopen(req) as response:
+            with open(filename, 'wb') as out_file:
+                out_file.write(response.read())
+                
+        print(f"      [SUCCESS] Image successfully downloaded and saved to: {filename}")
+        return {"status": "success", "image_path": filename}
+        
+    except Exception as e:
+        print(f"      [ERROR] Image generation failed: {e}")
+        return {"status": "failed", "image_path": None}
 # =====================================================================
 # INITIALIZE & REGISTER
 # =====================================================================
@@ -77,6 +143,19 @@ registry.register_tool(
     description="Saves state or metadata to the persistent Vector DB.", 
     schema=CommitMemoryInput, 
     func=commit_memory
+)
+registry.register_tool(
+    name="extract_character_profiles",
+    description="Analyzes a script to extract character identities and visual descriptions.",
+    schema=ExtractCharacterInput,
+    func=extract_character_profiles
+)
+
+registry.register_tool(
+    name="generate_character_image",
+    description="Generates a character reference image using local stable diffusion.",
+    schema=GenerateImageInput,
+    func=generate_character_image
 )
 
 if __name__ == "__main__":
