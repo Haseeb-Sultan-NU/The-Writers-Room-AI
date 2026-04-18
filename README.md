@@ -41,3 +41,13 @@ The-Writers-Room-AI/
     ├── agents_writers.py   # Scriptwriter & Validator nodes
     ├── agents_artists.py   # Character Designer & Image Synthesizer nodes
     └── comfyui_backup.py   # Local SDXL integration backup
+
+## 🎬 Evaluation Instructions
+
+**To evaluate Phase 1 (Autonomous Story & Image Generation):**
+Run the interactive Streamlit UI:
+`streamlit run src/app.py`
+
+**To evaluate Phase 2 (Parallel Video & Audio Synthesis):**
+Run the parallel LangGraph orchestrator directly in the terminal:
+`python -m src.graph_phase2` 
