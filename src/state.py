@@ -1,14 +1,28 @@
-from typing import TypedDict, List, Dict, Any
+from typing import Annotated, TypedDict, List, Dict, Any
+import operator
 
+# --- PHASE 2: Parallel Task State ---
+# This state is passed ONLY to the parallel worker nodes for a specific scene
+class SceneTaskState(TypedDict):
+    scene_id: int
+    scene_data: Dict[str, Any]
+    character_profiles: List[Dict[str, Any]]
+
+# --- MAIN GRAPH STATE ---
 class GraphState(TypedDict):
-    """
-    This defines the central state that gets passed from agent to agent.
-    Every agent will read from this, do its job, and append its results back here.
-    """
-    input_mode: str          # "manual" or "auto"
-    raw_prompt: str          # The user's initial idea or uploaded text
-    script: Dict[str, Any]   # The structured scene_manifest.json data
-    characters: List[Dict]   # The character_db.json data
-    images: List[str]        # Paths to the generated images
-    status: str              # "processing", "needs_review", "approved", or "failed"
-    errors: List[str]        # Keep track of formatting or validation errors
+    # Phase 1 Artifacts
+    input_mode: str
+    raw_prompt: str
+    script: Dict[str, Any]
+    characters: List[Dict[str, Any]]
+    images: List[str]
+    
+    # Phase 2 Artifacts (Using operator.add to safely merge parallel outputs)
+    manifest_path: str
+    audio_tracks: Annotated[List[Dict[str, Any]], operator.add]
+    base_videos: Annotated[List[Dict[str, Any]], operator.add]
+    swapped_videos: Annotated[List[Dict[str, Any]], operator.add]
+    final_scenes: Annotated[List[Dict[str, Any]], operator.add]
+    
+    errors: Annotated[List[str], operator.add]
+    status: str
