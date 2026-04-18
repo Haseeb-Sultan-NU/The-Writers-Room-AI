@@ -16,6 +16,7 @@ vector_store/
 image_assets/*
 scene_manifest.json
 character_db.json
+raw_scenes/*
 
 # OS files
 .DS_Store
