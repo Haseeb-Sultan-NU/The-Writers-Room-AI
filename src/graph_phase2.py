@@ -55,26 +55,76 @@ def video_gen_node(state: SceneTaskState):
     
     scene_id = state['scene_id']
     location = state['scene_data'].get('location', 'cinematic background')
+    character_profiles = state.get('character_profiles', [])
+    
     print(f"  [VIDEO PIPELINE] Processing Scene {scene_id}...")
     
-    # Query Pexels based on the scene's location description
-    result = registry.execute_tool(
-        "query_stock_footage", 
-        query=location, 
-        scene_id=scene_id
-    )
-    
-    if result["status"] == "success":
-        return {"base_videos": [{"scene_id": scene_id, "video_path": result["video_path"]}]}
-    else:
+    # 1. Fetch Stock Footage
+    vid_result = registry.execute_tool("query_stock_footage", query=location, scene_id=scene_id)
+    if vid_result["status"] != "success":
         return {"errors": [f"Scene {scene_id} video generation failed."]}
+        
+    base_video_path = vid_result["video_path"]
+    final_video_path = base_video_path
+    
+    # 2. Extract Character Identity Path
+    image_path = None
+    if character_profiles:
+        image_path = character_profiles[0].get("image_path")
+        
+    if image_path:
+        # 3. Validate Identity (Critical Constraint)
+        val_result = registry.execute_tool("identity_validator", image_path=image_path, video_path=base_video_path)
+        
+        if val_result.get("is_valid"):
+            # 4. Swap Face
+            swap_result = registry.execute_tool(
+                "face_swapper", 
+                image_path=image_path, 
+                video_path=base_video_path, 
+                scene_id=scene_id
+            )
+            if swap_result["status"] == "success":
+                final_video_path = swap_result["video_path"]
+                
+    return {
+        "base_videos": [{"scene_id": scene_id, "video_path": base_video_path}],
+        "swapped_videos": [{"scene_id": scene_id, "video_path": final_video_path}]
+    }
 
 def lip_sync_node(state: GraphState):
+    from src.mcp_registry import registry
+    
     print("\n[AGENT: LIP SYNC (FUSION)] Merging parallel audio and video streams...")
-    # This node automatically waits for BOTH parallel branches to finish
-    print(f"-> Received {len(state.get('audio_tracks', []))} audio tracks.")
-    print(f"-> Received {len(state.get('base_videos', []))} video tracks.")
-    return {"status": "fusion_complete"}
+    
+    # Grab the completed assets from the shared state
+    audio_tracks = state.get("audio_tracks", [])
+    swapped_videos = state.get("swapped_videos", [])
+    
+    final_scenes = []
+    
+    # Match the audio and video by scene_id
+    for audio in audio_tracks:
+        scene_id = audio["scene_id"]
+        # Find the matching video for this scene
+        matching_video = next((v for v in swapped_videos if v["scene_id"] == scene_id), None)
+        
+        if matching_video:
+            # Execute the fusion tool
+            result = registry.execute_tool(
+                "lip_sync_aligner",
+                video_path=matching_video["video_path"],
+                audio_path=audio["audio_path"],
+                scene_id=scene_id
+            )
+            
+            if result["status"] == "success":
+                final_scenes.append({
+                    "scene_id": scene_id,
+                    "final_path": result["final_video_path"]
+                })
+                
+    return {"final_scenes": final_scenes, "status": "completed"}
 
 # --- PARALLEL ROUTING LOGIC (The Core Requirement) ---
 
@@ -134,11 +184,18 @@ if __name__ == "__main__":
         "scenes": [
             {
                 "scene_id": 1, 
-                "location": "Dark Alley", 
+                # Changed query so Pexels gives us a video of a person to swap faces with
+                "location": "close up portrait man looking at camera dark night", 
                 "dialogue": [{"speaker": "DETECTIVE", "line": "It's quiet tonight. Too quiet."}]
             }
         ],
-        "characters": [{"name": "DETECTIVE"}]
+        "characters": [
+            {
+                "name": "DETECTIVE", 
+                # Tell Phase 2 exactly where the Phase 1 image is sitting
+                "image_path": "image_assets/char_86582b.jpg" 
+            }
+        ]
     }
     with open("scene_manifest.json", "w") as f:
         json.dump(dummy_manifest, f)
