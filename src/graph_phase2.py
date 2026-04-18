@@ -51,8 +51,23 @@ def voice_synth_node(state: SceneTaskState):
     return {"audio_tracks": audio_results}
 
 def video_gen_node(state: SceneTaskState):
-    print(f"  [VIDEO PIPELINE] Fetching stock footage for Scene {state['scene_id']}...")
-    return {"base_videos": [{"scene_id": state['scene_id'], "video_path": "mock_video.mp4"}]}
+    from src.mcp_registry import registry
+    
+    scene_id = state['scene_id']
+    location = state['scene_data'].get('location', 'cinematic background')
+    print(f"  [VIDEO PIPELINE] Processing Scene {scene_id}...")
+    
+    # Query Pexels based on the scene's location description
+    result = registry.execute_tool(
+        "query_stock_footage", 
+        query=location, 
+        scene_id=scene_id
+    )
+    
+    if result["status"] == "success":
+        return {"base_videos": [{"scene_id": scene_id, "video_path": result["video_path"]}]}
+    else:
+        return {"errors": [f"Scene {scene_id} video generation failed."]}
 
 def lip_sync_node(state: GraphState):
     print("\n[AGENT: LIP SYNC (FUSION)] Merging parallel audio and video streams...")

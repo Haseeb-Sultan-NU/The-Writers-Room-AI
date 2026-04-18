@@ -53,6 +53,10 @@ class VoiceSynthesisInput(BaseModel):
     character_name: str = Field(..., description="The name of the character speaking.")
     scene_id: int = Field(..., description="The ID of the scene.")
 
+class StockFootageInput(BaseModel):
+    query: str = Field(..., description="The visual search query for the scene (e.g., 'dark rainy alley').")
+    scene_id: int = Field(..., description="The ID of the scene.")
+
 # =====================================================================
 # TOOL IMPLEMENTATIONS (Dummy functions for now, we will connect LLMs later)
 # =====================================================================
@@ -273,6 +277,61 @@ def voice_cloning_synthesizer(text: str, character_name: str, scene_id: int) -> 
     except Exception as e:
         print(f"      [ERROR] Voice synthesis failed: {e}")
         return {"status": "failed", "audio_path": None}
+
+def query_stock_footage(query: str, scene_id: int) -> dict:
+    """Fetches base scene visuals using the Pexels Video API."""
+    import os
+    import requests
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    print(f"      [MCP] Fetching stock footage for: '{query}'...")
+    os.makedirs("raw_scenes", exist_ok=True)
+    video_path = f"raw_scenes/video_scene{scene_id}_base.mp4"
+    
+    api_key = os.getenv("PEXELS_API_KEY")
+    
+    # Graceful fallback to a generic cyberpunk/night city video if API fails or is missing
+    fallback_url = "https://videos.pexels.com/video-files/3205917/3205917-hd_1920_1080_25fps.mp4"
+
+    if not api_key:
+        print("      [WARNING] PEXELS_API_KEY not found. Using fallback video.")
+        download_url = fallback_url
+    else:
+        try:
+            # Query Pexels
+            headers = {"Authorization": api_key}
+            # Add 'orientation=landscape' for standard video format
+            url = f"https://api.pexels.com/videos/search?query={query}&per_page=1&orientation=landscape"
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("videos") and len(data["videos"]) > 0:
+                # Find an HD video link
+                video_files = data["videos"][0]["video_files"]
+                hd_files = [f for f in video_files if f["quality"] == "hd"]
+                download_url = hd_files[0]["link"] if hd_files else video_files[0]["link"]
+            else:
+                print("      [WARNING] No videos found for query. Using fallback.")
+                download_url = fallback_url
+        except Exception as e:
+            print(f"      [ERROR] Pexels API failed: {e}. Using fallback.")
+            download_url = fallback_url
+
+    try:
+        # Download the video file in chunks (safe for large files)
+        print("      [SYSTEM] Downloading video file...")
+        with requests.get(download_url, stream=True) as r:
+            r.raise_for_status()
+            with open(video_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        print(f"      [SUCCESS] Base video saved to {video_path}")
+        return {"status": "success", "video_path": video_path}
+    except Exception as e:
+        print(f"      [ERROR] Video download failed: {e}")
+        return {"status": "failed", "video_path": None}
 # =====================================================================
 # INITIALIZE & REGISTER
 # =====================================================================
@@ -318,6 +377,12 @@ registry.register_tool(
     description="Generates spoken audio waveforms from dialogue text.",
     schema=VoiceSynthesisInput,
     func=voice_cloning_synthesizer
+)
+registry.register_tool(
+    name="query_stock_footage",
+    description="Fetches cinematic stock video footage based on scene location.",
+    schema=StockFootageInput,
+    func=query_stock_footage
 )
 
 if __name__ == "__main__":
