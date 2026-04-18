@@ -48,6 +48,11 @@ class CommitMemoryInput(BaseModel):
     collection_name: str = Field(..., description="The ChromaDB collection to save to (e.g., 'script_history').")
     data: Dict[str, Any] = Field(..., description="The JSON data or metadata to save.")
 
+class VoiceSynthesisInput(BaseModel):
+    text: str = Field(..., description="The dialogue text to synthesize into speech.")
+    character_name: str = Field(..., description="The name of the character speaking.")
+    scene_id: int = Field(..., description="The ID of the scene.")
+
 # =====================================================================
 # TOOL IMPLEMENTATIONS (Dummy functions for now, we will connect LLMs later)
 # =====================================================================
@@ -236,6 +241,38 @@ def parse_manual_script(raw_text: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"      [ERROR] Groq parsing failed: {e}")
         return {"status": "failed", "script": {}}
+    
+def voice_cloning_synthesizer(text: str, character_name: str, scene_id: int) -> dict:
+    """Uses Edge-TTS to generate high-quality voice audio for characters."""
+    import asyncio
+    import edge_tts
+    import os
+
+    print(f"      [MCP] Synthesizing voice for {character_name}...")
+    
+    # Ensure our output directory exists as required by Phase 2
+    os.makedirs("raw_scenes", exist_ok=True)
+    
+    # Assign a distinct voice based on the character name
+    # Christopher is a deep male voice, Aria is a clear female voice
+    voice = "en-US-ChristopherNeural" if character_name.upper() in ["DETECTIVE", "KING ARIN", "WIZARD"] else "en-US-AriaNeural"
+    
+    # Format the file path
+    safe_name = character_name.replace(" ", "_").lower()
+    file_path = f"raw_scenes/audio_scene{scene_id}_{safe_name}.wav"
+    
+    # Edge-TTS runs asynchronously, so we wrap it
+    async def _generate():
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(file_path)
+        
+    try:
+        asyncio.run(_generate())
+        print(f"      [SUCCESS] Audio saved to {file_path}")
+        return {"status": "success", "audio_path": file_path}
+    except Exception as e:
+        print(f"      [ERROR] Voice synthesis failed: {e}")
+        return {"status": "failed", "audio_path": None}
 # =====================================================================
 # INITIALIZE & REGISTER
 # =====================================================================
@@ -275,6 +312,12 @@ registry.register_tool(
     description="Parses raw screenplay format into standardized JSON.",
     schema=ParseScriptInput,
     func=parse_manual_script
+)
+registry.register_tool(
+    name="voice_cloning_synthesizer",
+    description="Generates spoken audio waveforms from dialogue text.",
+    schema=VoiceSynthesisInput,
+    func=voice_cloning_synthesizer
 )
 
 if __name__ == "__main__":

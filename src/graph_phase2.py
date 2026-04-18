@@ -18,8 +18,37 @@ def scene_parser_node(state: GraphState):
         return {"errors": ["Missing manifest"], "status": "failed"}
 
 def voice_synth_node(state: SceneTaskState):
-    print(f"  [AUDIO PIPELINE] Generating audio for Scene {state['scene_id']}...")
-    return {"audio_tracks": [{"scene_id": state['scene_id'], "audio_path": "mock_audio.wav"}]}
+    from src.mcp_registry import registry
+    
+    scene_id = state['scene_id']
+    print(f"  [AUDIO PIPELINE] Processing Scene {scene_id}...")
+    
+    audio_results = []
+    dialogues = state['scene_data'].get('dialogue', [])
+    
+    # If there is dialogue, generate audio for each line
+    for i, line_data in enumerate(dialogues):
+        speaker = line_data.get("speaker", "Unknown")
+        text = line_data.get("line", "")
+        
+        if text:
+            # Dynamically call the MCP tool
+            result = registry.execute_tool(
+                "voice_cloning_synthesizer", 
+                text=text, 
+                character_name=speaker, 
+                scene_id=scene_id
+            )
+            
+            if result["status"] == "success":
+                audio_results.append({
+                    "scene_id": scene_id,
+                    "character": speaker,
+                    "line_index": i,
+                    "audio_path": result["audio_path"]
+                })
+                
+    return {"audio_tracks": audio_results}
 
 def video_gen_node(state: SceneTaskState):
     print(f"  [VIDEO PIPELINE] Fetching stock footage for Scene {state['scene_id']}...")
@@ -88,10 +117,13 @@ if __name__ == "__main__":
     # Generate a dummy manifest to test the routing
     dummy_manifest = {
         "scenes": [
-            {"scene_id": 1, "location": "Dark Alley", "dialogue": []},
-            {"scene_id": 2, "location": "Neon Bar", "dialogue": []}
+            {
+                "scene_id": 1, 
+                "location": "Dark Alley", 
+                "dialogue": [{"speaker": "DETECTIVE", "line": "It's quiet tonight. Too quiet."}]
+            }
         ],
-        "characters": [{"name": "Detective"}]
+        "characters": [{"name": "DETECTIVE"}]
     }
     with open("scene_manifest.json", "w") as f:
         json.dump(dummy_manifest, f)
