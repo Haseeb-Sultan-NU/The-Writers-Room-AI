@@ -35,23 +35,32 @@ Phase 1 transforms a raw human prompt into a structured, machine-interpretable n
 - **Multimodal Art Synthesis:** Dynamically generates character reference images from LLM-extracted visual profiles
 - **Interactive Streamlit UI:** Visualizes the state graph, review checkpoints, and final JSON/image deliverables
 
-### Phase 1 Architecture
+### Phase 1 Pipeline
 
+```
 Raw Prompt / Uploaded Script
-↓
-Intake & Validation Agent
-↓
-Scriptwriter Agent (Groq LLaMA 3.1)
-↓
-── HitL Checkpoint (Human Approval) ──
-↓
-Character Extraction Agent
-↓
-ChromaDB Memory Commit
-↓
-Image Synthesis Agent (Pollinations.ai)
-↓
-OUTPUT: scene_manifest.json + character art
+          │
+          ▼
+  Intake & Validation Agent
+          │
+          ▼
+  Scriptwriter Agent (Groq LLaMA 3.1)
+          │
+          ▼
+  ── HitL Checkpoint (Human Approval) ──
+          │
+          ▼
+  Character Extraction Agent
+          │
+          ▼
+  ChromaDB Memory Commit
+          │
+          ▼
+  Image Synthesis Agent (Pollinations.ai)
+          │
+          ▼
+  OUTPUT: scene_manifest.json + character art
+```
 
 ### Phase 1 Tech Stack
 
@@ -77,28 +86,41 @@ Phase 2 consumes `scene_manifest.json` from Phase 1 and produces fully synchroni
 - **Stateful Resumability:** Intermediate outputs are committed via `commit_memory`, supporting full pipeline recovery after failures or interruptions
 - **Temporal Alignment:** Frame-by-frame lip sync ensures speech timing matches facial geometry across all output scenes
 
-### Phase 2 Architecture
+### Phase 2 Pipeline
 
+```
 INPUT: scene_manifest.json
-↓
-Scene Parser Agent (get_task_graph)
-↓
-┌─────────────────┬──────────────────┐
-│  AUDIO PIPELINE │  VIDEO PIPELINE  │
-│                 │                  │
-│ Voice Synth     │ Video Generation │
-│ Agent           │ Agent            │
-│ (voice cloning, │ (scene visuals   │
-│  emotion-aware) │  from references)│
-│                 │                  │
-│                 │ Face Swap Agent  │
-│                 │ (identity-       │
-│                 │  validated)      │
-└────────┬────────┴────────┬─────────┘
-↓                 ↓
-Lip Sync Agent (Fusion Layer)
-↓
-OUTPUT: raw_scenes/*.mp4
+          │
+          ▼
+  Scene Parser Agent
+  (get_task_graph)
+          │
+          ▼
+  ┌───────┴───────┐
+  │               │
+  ▼               ▼
+AUDIO           VIDEO
+PIPELINE        PIPELINE
+  │               │
+  ▼               ▼
+Voice Synth     Video Generation
+Agent           Agent
+(voice clone,   (scene visuals
+ emotion-aware)  from references)
+                  │
+                  ▼
+                Face Swap Agent
+                (identity-validated)
+  │               │
+  └───────┬───────┘
+          │
+          ▼
+  Lip Sync Agent
+  (Fusion Layer)
+          │
+          ▼
+  OUTPUT: raw_scenes/*.mp4
+```
 
 ### Agent Definitions
 
@@ -124,22 +146,36 @@ OUTPUT: raw_scenes/*.mp4
 
 ## Repository Structure
 
+```
 Project-Montage/
-├── .env                      # API keys (gitignored)
+├── .env
 ├── requirements.txt
-├── image_assets/             # Generated character art
-├── chroma_data/              # Persistent vector memory
-├── raw_scenes/               # Phase 2 output videos
+├── image_assets/
+├── chroma_data/
+├── raw_scenes/
 └── src/
-├── app.py                # Streamlit frontend
-├── graph.py              # Phase 1 LangGraph orchestrator
-├── graph_phase2.py       # Phase 2 parallel LangGraph orchestrator
-├── state.py              # Shared TypedDict state
-├── memory.py             # ChromaDB initialization
-├── mcp_registry.py       # Dynamic MCP tool registry & Pydantic schemas
-├── agents_writers.py     # Scriptwriter & Validator nodes
-├── agents_artists.py     # Character Designer & Image Synthesizer nodes
-└── comfyui_backup.py     # Local SDXL integration backup
+    ├── app.py
+    ├── graph.py
+    ├── graph_phase2.py
+    ├── state.py
+    ├── memory.py
+    ├── mcp_registry.py
+    ├── agents_writers.py
+    ├── agents_artists.py
+    └── comfyui_backup.py
+```
+
+| File | Description |
+|------|-------------|
+| `app.py` | Streamlit frontend |
+| `graph.py` | Phase 1 LangGraph orchestrator |
+| `graph_phase2.py` | Phase 2 parallel LangGraph orchestrator |
+| `state.py` | Shared TypedDict state |
+| `memory.py` | ChromaDB initialization |
+| `mcp_registry.py` | Dynamic MCP tool registry & Pydantic schemas |
+| `agents_writers.py` | Scriptwriter & Validator nodes |
+| `agents_artists.py` | Character Designer & Image Synthesizer nodes |
+| `comfyui_backup.py` | Local SDXL integration backup |
 
 ---
 
@@ -153,16 +189,22 @@ pip install -r requirements.txt
 
 Add your API keys to `.env`:
 
+```
+GROQ_API_KEY=your_key_here
+```
+
 ---
 
 ## Running
 
 **Phase 1 — Writer's Room (Streamlit UI):**
+
 ```bash
 streamlit run src/app.py
 ```
 
 **Phase 2 — Studio Floor (parallel pipeline):**
+
 ```bash
 python -m src.graph_phase2
 ```
@@ -173,11 +215,11 @@ python -m src.graph_phase2
 
 | Node | Phase |
 |------|-------|
+| `scriptwriter_node` | 1 |
+| `character_extractor_node` | 1 |
+| `image_synthesizer_node` | 1 |
 | `scene_parser_node` | 2 |
 | `voice_synth_node` | 2 |
 | `video_gen_node` | 2 |
 | `face_swap_node` | 2 |
 | `lip_sync_node` | 2 |
-| `scriptwriter_node` | 1 |
-| `character_extractor_node` | 1 |
-| `image_synthesizer_node` | 1 |
